@@ -17,6 +17,7 @@ namespace micro_transfer_check
         {
             try
             {
+                _logger.Info("Starting Scheduler.");
                 _scheduler = new StdSchedulerFactory().GetScheduler().Result;
                 _scheduler.Start();
 
@@ -30,7 +31,7 @@ namespace micro_transfer_check
                 var transferJob = JobBuilder.Create<CoreJob>().Build();
                 _scheduler.ScheduleJob(transferJob, triggerTransfer);
 
-                _logger.Info("Transfer Job Was scheduled and started - every 60s");
+                _logger.Info("Transfer Job Was scheduled and started - 60s");
             }
             catch (SchedulerException se)
             {
