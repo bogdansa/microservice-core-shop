@@ -11,9 +11,16 @@ using NLog.Web;
 using RawRabbit;
 using RawRabbit.vNext;
 using RawRabbit.Configuration;
+using Newtonsoft.Json;
 
 namespace micro_email
 {
+    public class EmailMessage
+    {
+        public string EmailAddress { get;set; }
+        public string Message { get;set; }
+    }
+
     public class Startup
     {
         public Startup(IHostingEnvironment env, ILogger<Startup> logger)
@@ -40,13 +47,14 @@ namespace micro_email
 
             var client = BusClientFactory.CreateDefault(busConfig);
 
-            client.SubscribeAsync<Tuple<string, string>>(async (msg, context) =>
+            client.SubscribeAsync<string>(async (json, context) =>
             {
-                logger.LogInformation($"Sending email - {msg.Item1} with message {msg.Item2}")
-                Console.WriteLine($"Recieved: {msg.Item1} {msg.Item2}.");
+                var msg = JsonConvert.DeserializeObject<EmailMessage>(json);
+
+                logger.LogInformation($"Sending email - {msg.EmailAddress} with message {msg.Message}");
             }, (cfg) => cfg.WithExchange(
                   ex => ex.WithName("email_exchange")).WithQueue(
-                  q => q.WithName("email_queue")));
+                  q => q.WithName("email_queue")).WithRoutingKey("email_command"));
 
         }
 
