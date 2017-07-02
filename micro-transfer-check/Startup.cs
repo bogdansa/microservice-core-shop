@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,11 +11,14 @@ using Quartz;
 using System.Threading;
 using NLog.Extensions.Logging;
 using NLog.Web;
+using NLog;
 using RawRabbit;
 using RawRabbit.vNext;
 using RawRabbit.Configuration;
 using Newtonsoft.Json;
 using Microsoft.EntityFrameworkCore;
+using SimpleInjector;
+using SimpleInjector.Integration.AspNetCore.Mvc;
 
 namespace micro_transfer_check
 {
@@ -37,6 +41,8 @@ namespace micro_transfer_check
 
     public class Startup
     {
+        private readonly Container _container = new Container();
+
         public Startup(IHostingEnvironment env, ILogger<Startup> logger)
         {
             var builder = new ConfigurationBuilder()
@@ -49,9 +55,6 @@ namespace micro_transfer_check
             env.ConfigureNLog("NLog.config");
 
             logger.LogInformation("Service started");
-
-            MainScheduler.Start();
-
         }
 
         public IConfigurationRoot Configuration { get; }
@@ -59,19 +62,9 @@ namespace micro_transfer_check
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
-            services.AddSingleton<SomeService>();
 
-            services.AddSingleton<IBusClient>((x) => {
-                var busConfig = new RawRabbitConfiguration
-                    {
-                        Username = "guest",
-                        Password = "guest",
-                        Port = 5672,
-                        VirtualHost = "/",
-                        Hostnames = { "localhost" }
-                    };
-
-                return BusClientFactory.CreateDefault(busConfig);
+            services.AddSingleton<IControllerActivator>((x) => {
+                return new SimpleInjectorControllerActivator(_container);
             });
         }
 
@@ -82,28 +75,10 @@ namespace micro_transfer_check
             app.UseDeveloperExceptionPage();
 
             app.UseMvc();
-        }
-    }
 
-    public class SomeService 
-    {
-        public SomeService(IBusClient client, ILogger<SomeService> logger)
-        {
-            client.SubscribeAsync<string>(async (json, context) =>
-            {
-                var orderAwaitingTransfer = JsonConvert.DeserializeObject<OrderAwaitingTransfer>(json);
+            app.InitializeContainer(_container, env);
 
-                logger.LogInformation($"Received Order Awaiting Transfer - {orderAwaitingTransfer.Id}");
-
-                using (var dbContext = new TransferJobDBContext())
-                {
-                    dbContext.OrdersAwaitingTransfer.Add(orderAwaitingTransfer);
-                    dbContext.SaveChanges();
-                }
-
-            }, (cfg) => cfg.WithExchange(
-                  ex => ex.WithName("order_exchange")).WithQueue(
-                  q => q.WithName("order_queue")).WithRoutingKey("order_awaiting_transfer"));
+            MainScheduler.Start(_container);
         }
     }
 }

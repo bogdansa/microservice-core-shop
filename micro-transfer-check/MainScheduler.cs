@@ -5,6 +5,7 @@ using NLog;
 using Quartz;
 using Quartz.Impl;
 using micro_transfer_check.Jobs;
+using SimpleInjector;
 
 namespace micro_transfer_check 
 {
@@ -13,12 +14,13 @@ namespace micro_transfer_check
         private static ILogger _logger = LogManager.GetCurrentClassLogger();
         private static IScheduler _scheduler;
 
-        public static void Start()
+        public static void Start(Container container)
         {
             try
             {
                 _logger.Info("Starting Scheduler.");
-                _scheduler = new StdSchedulerFactory().GetScheduler().Result;
+
+                _scheduler = container.GetInstance<IScheduler>();
                 _scheduler.Start();
 
                 var triggerTransfer = TriggerBuilder.Create()
